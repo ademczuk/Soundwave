@@ -31,11 +31,20 @@ interface AgentDetailPanelProps {
 
 type AgentStatus = "idle" | "processing" | "completed";
 
-function deriveStatus(agentEvents: SubagentCustomEvent[]): AgentStatus {
+const STALENESS_THRESHOLD_MS = 15_000; // Agent idle if no recent event
+
+function deriveStatus(agentEvents: SubagentCustomEvent[], now: number): AgentStatus {
   if (agentEvents.length === 0) return "idle";
 
   const last = agentEvents[agentEvents.length - 1];
   if (last.type === "subagent_end") return "completed";
+
+  // Stale events: if most recent event is older than threshold, agent is
+  // no longer active — likely finished while observer was disconnected
+  if (last.elapsed != null && last.elapsed * 1000 > STALENESS_THRESHOLD_MS) {
+    return "idle";
+  }
+
   if (
     last.type === "subagent_start" ||
     last.type === "subagent_tool_call" ||
@@ -44,8 +53,6 @@ function deriveStatus(agentEvents: SubagentCustomEvent[]): AgentStatus {
     return "processing";
   }
 
-  // subagent_tool_result after the last tool_call means still active
-  // unless followed by subagent_end (already handled above)
   return "processing";
 }
 
@@ -115,8 +122,12 @@ export function AgentDetailPanel({
     [agentEvents],
   );
 
+  // Elapsed time since last event
+  const feedRef = useRef<HTMLDivElement>(null);
+  const now = Date.now();
+
   // Derive status
-  const status = useMemo(() => deriveStatus(agentEvents), [agentEvents]);
+  const status = useMemo(() => deriveStatus(agentEvents, now), [agentEvents, now]);
   const statusMeta = STATUS_META[status];
 
   // Latest subagent_message content
@@ -126,9 +137,6 @@ export function AgentDetailPanel({
     return messages[messages.length - 1];
   }, [agentEvents]);
 
-  // Elapsed time since last event
-  const feedRef = useRef<HTMLDivElement>(null);
-  const now = Date.now();
 
   if (!agent) return null;
 
