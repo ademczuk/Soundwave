@@ -26,7 +26,6 @@ from decepticon.backends import DockerSandbox
 from decepticon.core.config import load_config
 from decepticon.llm import LLMFactory
 from decepticon.middleware import (
-    BashIntelMiddleware,
     FilesystemMiddlewareNoExecute,
     SandboxNotificationMiddleware,
 )
@@ -81,7 +80,6 @@ def create_recon_agent():
     middleware = [
         DecepticonSkillsMiddleware(backend=backend, sources=["/skills/recon/", "/skills/shared/"]),
         FilesystemMiddlewareNoExecute(backend=backend),
-        BashIntelMiddleware(),
         SandboxNotificationMiddleware(sandbox=sandbox),
     ]
     if fallback_models:
