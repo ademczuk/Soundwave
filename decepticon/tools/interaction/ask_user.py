@@ -15,6 +15,7 @@ after resume.
 
 from __future__ import annotations
 
+import ast
 import json
 from typing import Annotated, Any
 
@@ -31,6 +32,8 @@ def _coerce_options_list(v: Any) -> list[Any]:
 
     Local models (Ollama, etc.) occasionally produce:
     - A JSON *string* instead of a JSON *array* for the options list
+    - A Python-syntax string ``[{'label': ..., 'description': ...}]``
+      (single quotes, unescaped newlines) from WebUI/the CLI
     - A single ``QuestionOption`` dict instead of a list of them
 
     Silently normalising these patterns keeps the engagement flow alive
@@ -39,13 +42,30 @@ def _coerce_options_list(v: Any) -> list[Any]:
     if isinstance(v, list):
         return v
     if isinstance(v, str):
+        # Try JSON first (double-quote syntax from well-behaved models).
         try:
             parsed = json.loads(v)
             if isinstance(parsed, list):
                 return parsed
         except (json.JSONDecodeError, TypeError):
-            # Intentionally ignore malformed JSON and normalize to [] below.
-            _ = "invalid options payload"
+            pass
+        # Try Python literal syntax (single-quote dicts, unescaped newlines
+        # from the CLI / WebUI message formatting).
+        try:
+            parsed = ast.literal_eval(v)
+            if isinstance(parsed, list):
+                return parsed
+        except (ValueError, SyntaxError, TypeError, MemoryError):
+            pass
+        # Last resort: strip unescaped newlines and retry JSON.
+        # Some WebUI renderers emit literal newlines inside JSON strings.
+        try:
+            cleaned = v.replace("\r\n", "\\n").replace("\r", "\\n").replace("\n", "\\n")
+            parsed = json.loads(cleaned)
+            if isinstance(parsed, list):
+                return parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
         # Unparseable string → empty list; the picker still works via
         # free-text Other fallback.
         return []
