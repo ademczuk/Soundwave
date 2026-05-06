@@ -201,7 +201,7 @@ def create_decepticon_agent():
 
     # Assemble middleware stack
     middleware = [
-        EngagementContextMiddleware(),
+        EngagementContextMiddleware(role="orchestrator"),
         SkillsMiddleware(backend=backend, sources=["/skills/decepticon/", "/skills/shared/"]),
         FilesystemMiddleware(backend=backend),
         SubAgentMiddleware(backend=backend, subagents=subagents),

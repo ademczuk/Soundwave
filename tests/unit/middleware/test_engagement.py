@@ -53,7 +53,14 @@ def _flatten(message: SystemMessage | None) -> str:
 
 @pytest.fixture
 def middleware() -> EngagementContextMiddleware:
+    """Subagent-role middleware (default)."""
     return EngagementContextMiddleware()
+
+
+@pytest.fixture
+def orchestrator_middleware() -> EngagementContextMiddleware:
+    """Orchestrator-role middleware (gets RULES_OVERRIDE + cross-domain skill paths)."""
+    return EngagementContextMiddleware(role="orchestrator")
 
 
 @pytest.fixture(autouse=True)
@@ -153,14 +160,14 @@ def test_benchmark_mode_env_off_does_not_inject_challenge_context(
     assert result is req
 
 
-def test_benchmark_mode_env_on_injects_rules_override(
+def test_benchmark_mode_env_on_injects_rules_override_for_orchestrator(
     monkeypatch: pytest.MonkeyPatch,
-    middleware: EngagementContextMiddleware,
+    orchestrator_middleware: EngagementContextMiddleware,
 ) -> None:
-    """BENCHMARK_MODE=1 with empty state still injects the rule-suspension addendum."""
+    """BENCHMARK_MODE=1 + orchestrator role → rule-suspension addendum is injected."""
     monkeypatch.setenv("BENCHMARK_MODE", "1")
     req = _FakeRequest(state={})
-    result = middleware._inject(req)
+    result = orchestrator_middleware._inject(req)
 
     text = _flatten(result.system_message)
     assert "[BENCHMARK MODE — engaged]" in text
@@ -169,9 +176,44 @@ def test_benchmark_mode_env_on_injects_rules_override(
     assert "RECON objective" in text
 
 
-def test_benchmark_mode_full_context(
+def test_benchmark_mode_subagent_omits_rules_override_and_exploit_paths(
     monkeypatch: pytest.MonkeyPatch,
     middleware: EngagementContextMiddleware,
+) -> None:
+    """Subagent role: NO rule-suspension block, NO cross-domain skill path hints.
+
+    Per-challenge context (target URL, tags, flag format, brief) IS still
+    injected so the sub-agent knows what it's attacking.
+    """
+    monkeypatch.setenv("BENCHMARK_MODE", "1")
+    req = _FakeRequest(
+        state={
+            "target_url": "http://x",
+            "vulnerability_tags": ["idor"],
+            "flag_format": "FLAG{...}",
+            "mission_brief": "test",
+        }
+    )
+    result = middleware._inject(req)
+
+    text = _flatten(result.system_message)
+    # Orchestrator-only blocks must be absent.
+    assert "[BENCHMARK MODE — engaged]" not in text
+    assert "Rule 8 (Startup Required)" not in text
+    assert "RECON objective" not in text
+    assert "/skills/exploit/web/" not in text
+    assert "/skills/benchmark/SKILL.md" not in text
+    # Per-challenge context must still be present.
+    assert "## CTF Benchmark Challenge" in text
+    assert "**Target URL:** http://x" in text
+    assert "**Vulnerability tags:** idor" in text
+    assert "**Flag format:** FLAG{...}" in text
+    assert "**Mission brief:** test" in text
+
+
+def test_benchmark_mode_full_context(
+    monkeypatch: pytest.MonkeyPatch,
+    orchestrator_middleware: EngagementContextMiddleware,
 ) -> None:
     monkeypatch.setenv("BENCHMARK_MODE", "1")
     req = _FakeRequest(
@@ -185,12 +227,12 @@ def test_benchmark_mode_full_context(
             "mission_brief": "Login Form SQLi — bypass authentication",
         },
     )
-    result = middleware._inject(req)
+    result = orchestrator_middleware._inject(req)
 
     text = _flatten(result.system_message)
     # engagement section
     assert "Workspace slug: benchmark-XBEN-001-24" in text
-    # benchmark section
+    # benchmark section (orchestrator gets full block)
     assert "[BENCHMARK MODE — engaged]" in text
     assert "## CTF Benchmark Challenge" in text
     assert "**Target URL:** http://host.docker.internal:33001" in text
@@ -198,6 +240,8 @@ def test_benchmark_mode_full_context(
     assert "**Vulnerability tags:** sqli, auth-bypass" in text
     assert "**Flag format:** FLAG{<64-char-hex>}" in text
     assert "**Mission brief:** Login Form SQLi — bypass authentication" in text
+    # exploit-skill path hint included for orchestrator
+    assert "/skills/exploit/web/" in text
     # engagement section comes before benchmark section
     assert text.index("Workspace slug:") < text.index("[BENCHMARK MODE")
 
@@ -240,7 +284,7 @@ def test_benchmark_extra_ports_empty_does_not_emit_section(
 
 def test_appended_to_existing_system_message(
     monkeypatch: pytest.MonkeyPatch,
-    middleware: EngagementContextMiddleware,
+    orchestrator_middleware: EngagementContextMiddleware,
 ) -> None:
     """When the request already has a system message, content_blocks are extended."""
     monkeypatch.setenv("BENCHMARK_MODE", "1")
@@ -248,7 +292,7 @@ def test_appended_to_existing_system_message(
         state={"engagement_name": "demo", "workspace_path": "/workspace"},
         system_message=SystemMessage(content="ORIGINAL_PROMPT_BODY"),
     )
-    result = middleware._inject(req)
+    result = orchestrator_middleware._inject(req)
     text = _flatten(result.system_message)
     # original content is preserved; addendum is appended.
     assert "ORIGINAL_PROMPT_BODY" in text

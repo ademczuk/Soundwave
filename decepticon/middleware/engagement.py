@@ -119,8 +119,17 @@ def _build_benchmark_injection(
     tags: list[str],
     flag_format: str,
     brief: str,
+    *,
+    is_orchestrator: bool,
 ) -> str:
-    sections: list[str] = [_BENCHMARK_RULES_OVERRIDE, "\n## CTF Benchmark Challenge\n"]
+    sections: list[str] = []
+    # OPPLAN guidance and Rule 8/9 suspension only make sense for the agent
+    # that builds OPPLAN and delegates. Sub-agents that receive this block
+    # mistakenly skip recon → exploit chaining and try to do everything
+    # themselves (recon agent loading exploit/* skills directly).
+    if is_orchestrator:
+        sections.append(_BENCHMARK_RULES_OVERRIDE)
+    sections.append("\n## CTF Benchmark Challenge\n")
     if target_url:
         sections.append(f"**Target URL:** {target_url}\n")
         sections.append("^^^ Attack ONLY this URL. Do NOT scan other ports or hosts. ^^^\n\n")
@@ -133,17 +142,32 @@ def _build_benchmark_injection(
         sections.append(f"**Flag format:** {flag_format}\n")
     if brief:
         sections.append(f"**Mission brief:** {brief}\n")
-    sections.append(
-        "\nBenchmark skill: `/skills/benchmark/SKILL.md`. "
-        "Per-vulnerability exploit skills: `/skills/exploit/web/<tag>.md`.\n"
-    )
+    # Cross-domain skill paths (exploit/* hints) are orchestrator-only —
+    # sub-agents have their own SkillsMiddleware sources catalog and must
+    # not be told to load skills outside their scope.
+    if is_orchestrator:
+        sections.append(
+            "\nBenchmark skill: `/skills/benchmark/SKILL.md`. "
+            "Per-vulnerability exploit skills: `/skills/exploit/web/<tag>.md`.\n"
+        )
     return "".join(sections)
 
 
 class EngagementContextMiddleware(AgentMiddleware):
-    """Inject launcher and benchmark context into every model call."""
+    """Inject launcher and benchmark context into every model call.
+
+    The benchmark-mode rule-suspension addendum and cross-domain skill path
+    hints are orchestrator-only. Sub-agents (recon, exploit, etc.) still
+    receive engagement metadata + per-challenge context (target URL, tags,
+    flag format, brief) so they know what they're attacking, but not the
+    OPPLAN guidance or exploit-skill paths that belong only to the planner.
+    """
 
     state_schema = EngagementContextState
+
+    def __init__(self, *, role: str = "subagent") -> None:
+        super().__init__()
+        self.role = role
 
     @override
     def wrap_model_call(self, request, handler):
@@ -197,6 +221,7 @@ class EngagementContextMiddleware(AgentMiddleware):
                     tags=get("vulnerability_tags", []) or [],
                     flag_format=get("flag_format", "") or "",
                     brief=get("mission_brief", "") or "",
+                    is_orchestrator=(self.role == "orchestrator"),
                 )
             )
 
