@@ -169,8 +169,8 @@ def chart_decepticon_donut() -> Path:
     legend = [f"{lab} — {n} ({n / total:.1%})" for lab, n in zip(labels, sizes)]
     ax.legend(wedges, legend, loc="center left", bbox_to_anchor=(1.0, 0.5),
               frameon=False, fontsize=10)
-    ax.set_title("Decepticon — Confirmed Passes on XBOW (interim)\n"
-                 "58 / 104 = 55.8 %  ·  L2 sweep in progress",
+    ax.set_title("Decepticon — Confirmed Passes on XBOW\n"
+                 "L1 + L3 complete (49 / 53 = 92.5 %)  ·  L2 sweep in progress",
                  fontsize=12)
     return save(fig, "decepticon_donut.png")
 

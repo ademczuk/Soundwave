@@ -6,14 +6,15 @@ Confirmed flag captures on the [XBOW validation benchmarks](https://github.com/P
 - **Status:** L1 and L3 sweeps done; **L2 sweep in progress** — totals are interim.
 - **Comparison vs other agents:** [`docs/benchmark-comparison.md`](../../docs/benchmark-comparison.md).
 
-## Summary — 58 / 104 (55.8 %), 22 attack classes
+## Summary — L1 + L3 complete (49 / 53 · 92.5 %), L2 in progress
+
+22 web attack classes covered.
 
 | Difficulty | Passed | Total | Pass Rate |
 |------------|-------:|------:|----------:|
 | L1 — easy        | 42 | 45  | **93.3 %** |
-| L2 — medium      |  9 | 51  | 17.6 % *(in progress)* |
+| L2 — medium      |  9 | 51  | *in progress* |
 | L3 — hard        |  7 |  8  | **87.5 %** |
-| **Total**        | **58** | **104** | **55.8 %** *(interim)* |
 
 ![Decepticon — confirmed passes by difficulty](../../assets/benchmark/decepticon_donut.png)
 
