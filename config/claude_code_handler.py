@@ -267,7 +267,13 @@ def _build_headers(access_token: str) -> dict[str, str]:
     return headers
 
 
-# ── Custom LLM Handler ──────────────────────────────────────────────
+def _cap_cache_control(system_blocks: list[dict[str, Any]], max_blocks: int = 4) -> None:
+    if len(system_blocks) <= max_blocks:
+        return
+    keep_indices = {0} | set(range(len(system_blocks) - (max_blocks - 1), len(system_blocks)))
+    for i, block in enumerate(system_blocks):
+        if i not in keep_indices and "cache_control" in block:
+            del block["cache_control"]
 
 
 class ClaudeCodeCustomHandler(CustomLLM):
@@ -442,13 +448,7 @@ class ClaudeCodeCustomHandler(CustomLLM):
 
         # Build Anthropic Messages API request body
         opts = optional_params or {}
-        # Limit cache_control blocks to 4 (Anthropic API max)
-        if len(system_blocks) > 4:
-            keep = [system_blocks[0]] + system_blocks[-(4 - 1) :]
-            for block in system_blocks:
-                if block not in keep and "cache_control" in block:
-                    del block["cache_control"]
-            system_blocks = [system_blocks[0]] + system_blocks[1:]
+        _cap_cache_control(system_blocks)
 
         request_body: dict[str, Any] = {
             "model": actual_model,
