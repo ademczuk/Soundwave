@@ -25,7 +25,9 @@ def test_userinfo_host_still_strips_port():
 
 
 def test_plain_url_host_unchanged():
-    assert any(target == "example.com" for target in extract_targets("curl https://example.com/path?q=1"))
+    assert any(
+        target == "example.com" for target in extract_targets("curl https://example.com/path?q=1")
+    )
 
 
 @pytest.mark.parametrize(
