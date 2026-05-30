@@ -270,9 +270,6 @@ class TestChainToDict:
 # ── plan_chains ──────────────────────────────────────────────────────────
 
 
-_SENTINEL: list[dict[str, Any]] = []  # used as a unique default sentinel
-
-
 class TestPlanChains:
     def _row(
         self,
